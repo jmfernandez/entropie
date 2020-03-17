@@ -6,6 +6,9 @@
 #  (C) Copyright 2011 Olivier Delhomme
 #  e-mail : olivier.delhomme@free.fr
 #
+#  (C) Copyright 2020 José Mª Fernández
+#  e-mail : josemariafg@gmail.com
+#
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
 #  the Free Software Foundation; either version 2, or (at your option)
@@ -21,9 +24,9 @@
 #  Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-__author__ = "Olivier Delhomme <olivier.delhomme@free.fr>"
-__date__ = "28.09.2016"
-__version__ = "Revision: 0.0.2"
+__author__ = "Olivier Delhomme <olivier.delhomme@free.fr> , José Mª Fernández <josemariafg@gmail.com>"
+__date__ = "2020-03-17"
+__version__ = "Revision: 0.1.0"
 
 
 import sys
@@ -51,6 +54,7 @@ class Options:
     size = 16
     files = []
     method = 'local'
+    encoding = 'utf-8'
     output = False
 
     def __init__(self):
@@ -62,6 +66,7 @@ class Options:
         self.base = 2
         self.files = []
         self.method = 'local'
+        self.encoding = 'utf-8'
         self.output = False
         self.parse_command_line()
 
@@ -98,6 +103,9 @@ class Options:
 
       -e, --entropy
         Outputs only the entropy (the number)
+
+      -E, --encoding
+        Set the encoding to use when the entropy is computed on each line
 
 
   EXAMPLES
@@ -137,17 +145,17 @@ class Options:
         """Parses command line's options and arguments
         """
 
-        short_options = "hlbes:m:"
-        long_options = ['help', 'list', 'block', 'entropy', 'size=', 'method=']
+        short_options = "hlbes:m:E:"
+        long_options = ['help', 'list', 'block', 'entropy', 'size=', 'method=', 'encoding=']
 
         # Read options and arguments
         try:
             opts, args = getopt.getopt(sys.argv[1:], short_options, long_options)
         except getopt.GetoptError as err:
             # print help information and exit with error :
-            print("%s" % str(err))
+            print(str(err))
             self.usage(2)
-
+        
         for opt, arg in opts:
 
             if opt in ('-h', '--help'):
@@ -162,6 +170,8 @@ class Options:
                 self.size = self.transform_to_int(opt, arg)
             elif opt in ('-e', '--entropy'):
                 self.output = True
+            elif opt in ('-E', '--encoding'):
+                self.encoding = arg
 
         self.files = args
 
@@ -253,7 +263,7 @@ def open_file(filename, my_opts):
         a_file = open(filename, 'rb')
         read_from_file = lambda a_file: read_block_from_file(a_file,size)
     else:
-        a_file = open(filename, 'r')
+        a_file = open(filename, 'r', encoding=my_opts.encoding)
         read_from_file = read_line_from_file
 
     return a_file , read_from_file
