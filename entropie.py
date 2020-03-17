@@ -143,7 +143,7 @@ class Options:
         # Read options and arguments
         try:
             opts, args = getopt.getopt(sys.argv[1:], short_options, long_options)
-        except getopt.GetoptError, err:
+        except getopt.GetoptError as err:
             # print help information and exit with error :
             print("%s" % str(err))
             self.usage(2)
@@ -300,20 +300,19 @@ def entropy_local(my_opts):
 
         (buffer, length) = read_from_file(a_file, my_opts)
         i = 0
-        while buffer != '':
-            if length > 0:
-                # Creating our probabilty vector
-                probability = buffer_probability_dict(buffer, length)
-                if my_opts.block:
-                    if not my_opts.output:
-                        print('%s : %s' % (i, buffer_shannon_entropy(buffer, length, probability, my_opts)))
-                    else:
-                        print('%s' % buffer_shannon_entropy(buffer, length, probability, my_opts))
+        while length > 0:
+            # Creating our probabilty vector
+            probability = buffer_probability_dict(buffer, length)
+            if my_opts.block:
+                if not my_opts.output:
+                    print('%s : %s' % (i, buffer_shannon_entropy(buffer, length, probability, my_opts)))
                 else:
-                    if not my_opts.output:
-                        print('%s : %s' % (buffer, buffer_shannon_entropy(buffer, length, probability, my_opts)))
-                    else:
-                        print('%s' % buffer_shannon_entropy(buffer, length, probability, my_opts))
+                    print('%s' % buffer_shannon_entropy(buffer, length, probability, my_opts))
+            else:
+                if not my_opts.output:
+                    print('%s : %s' % (buffer, buffer_shannon_entropy(buffer, length, probability, my_opts)))
+                else:
+                    print('%s' % buffer_shannon_entropy(buffer, length, probability, my_opts))
 
             (buffer, length) = read_from_file(a_file, my_opts)
             i = i + 1
