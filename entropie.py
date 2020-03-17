@@ -170,22 +170,7 @@ class Options:
 
 
 def buffer_shannon_entropy(buffer, buffer_size, probability, my_opts):
-
-    entropie = 0.0
-    # Calculating entropy on each {x1,... xn} from the buffer
-
-    for key in probability.keys():
-
-        p = probability[key]
-
-        # if p == 0 is is admitted that 0 * logn(0) = 0 so nothing has to be done
-        if p != 0.0:
-            entropie = entropie + p * math.log(p, my_opts.base)
-
-    if entropie >= 0:
-        return entropie
-    else:
-        return -entropie
+    return buffer_shannon_entropy_subset(buffer, buffer_size, probability, probability, my_opts)
 
 # End of buffer_shannon_entropy function
 
@@ -201,7 +186,7 @@ def buffer_shannon_entropy_subset(buffer, buffer_size, probability, histogram, m
 
         # if p == 0 is is admitted that 0 * logn(0) = 0 so nothing has to be done
         if p != 0.0:
-            entropie = entropie + p * math.log(p, my_opts.base)
+            entropie += p * math.log(p, my_opts.base)
 
     if entropie > 0:
         return entropie
@@ -215,16 +200,17 @@ def buffer_shannon_entropy_subset(buffer, buffer_size, probability, histogram, m
 def buffer_histogram_dict(buffer, buffer_size, histogram):
 
     # Filling the dictionary with the values
-    i = 0
-    while i < buffer_size:
-        value = buffer[i]
+    for i, value in enumerate(buffer):
+    #i = 0
+    #while i < buffer_size:
+        #value = buffer[i]
 
         if value in histogram:
-            histogram[value] = histogram[value] + 1
+            histogram[value] += 1
         else:
             histogram[value] = 1
 
-        i = i + 1
+        #i += 1
 
     return histogram
 
@@ -236,8 +222,8 @@ def probability_on_histogram(histogram, buffer_size):
     probability = dict()
 
     # Calculating the probability
-    for key in histogram.keys():
-        probability[key] = float(histogram[key]) / float(buffer_size)
+    for key,hist in histogram.items():
+        probability[key] = float(hist) / float(buffer_size)
         # print('%s : %s' % (key, probability[key]))
 
     return probability
@@ -262,116 +248,102 @@ def open_file(filename, my_opts):
     """
 
     if my_opts.block:
+        size = my_opts.size
+        
         a_file = open(filename, 'rb')
+        read_from_file = lambda a_file: read_block_from_file(a_file,size)
     else:
         a_file = open(filename, 'r')
+        read_from_file = read_line_from_file
 
-    return a_file
+    return a_file , read_from_file
 
 # End of open_file() function
 
 
-def read_from_file(a_file, my_opts):
+def read_line_from_file(a_file):
     """Reads one line from an opened file (in text mode) strip the trailing
     \n and returns it
     """
 
-    if my_opts.block:
-        buffer = a_file.read(my_opts.size)
-        return (buffer, len(buffer))
+    line = a_file.readline()
+    if len(line) == 0:
+        len_line = None
     else:
-        line = a_file.readline()
         line = line.strip()
-        return (line, len(line))
+        len_line = len(line)
+    
+    return (line, len_line)
+
+def read_block_from_file(a_file, size):
+    """ Reads one block from an opened file (in binary mode)
+        and returns it
+    """
+
+    buffer = a_file.read(size)
+    len_buffer = len(buffer)
+    return (buffer, len_buffer if len_buffer > 0  else None)
 
 # End of read_from_file() function
 
 
-def entropy_local(my_opts):
-
-    for filename in my_opts.files:
-        if my_opts.block:
-            if not my_opts.output:
-                print('Calculating block local entropy on file "%s"' % filename)
-        else:
-            if not my_opts.output:
-                print('Calculating line local entropy on file "%s"' % filename)
-        a_file = open_file(filename, my_opts)
-
-        (buffer, length) = read_from_file(a_file, my_opts)
-        i = 0
-        while length > 0:
-            # Creating our probabilty vector
+def entropy_local(a_file, read_from_file, my_opts):
+    (buffer, length) = read_from_file(a_file)
+    i = 0
+    while length is not None:
+        if length >  0:
+            # Creating our probability vector
             probability = buffer_probability_dict(buffer, length)
-            if my_opts.block:
-                if not my_opts.output:
-                    print('%s : %s' % (i, buffer_shannon_entropy(buffer, length, probability, my_opts)))
-                else:
-                    print('%s' % buffer_shannon_entropy(buffer, length, probability, my_opts))
+            
+            entropy_str = str(buffer_shannon_entropy(buffer, length, probability, my_opts))
+            if not my_opts.output:
+                elem = str(i)  if my_opts.block  else  buffer
+                print(elem + ' : ' + entropy_str)
             else:
-                if not my_opts.output:
-                    print('%s : %s' % (buffer, buffer_shannon_entropy(buffer, length, probability, my_opts)))
-                else:
-                    print('%s' % buffer_shannon_entropy(buffer, length, probability, my_opts))
+                print(entropy_str)
 
-            (buffer, length) = read_from_file(a_file, my_opts)
-            i = i + 1
-
-        a_file.close()
+        (buffer, length) = read_from_file(a_file)
+        i = i + 1
 
 # End of entropy_local() function
 
 
-def entropy_global(my_opts):
+def entropy_global(a_file, read_from_file, my_opts):
+    # Calculating the global probabilities
+    histogram = dict()
+    total = 0
 
-    for filename in my_opts.files:
-        if not my_opts.output:
-            print('Calculating line global entropy on file "%s"' % filename)
-        a_file = open_file(filename, my_opts)
+    (buffer, length) = read_from_file(a_file)
 
-        # Calculating the global probabilities
-        histogram = dict()
-        total = 0
+    while length is not None:
+        total = total + length
+        histogram = buffer_histogram_dict(buffer, length, histogram)
+        (buffer, length) = read_from_file(a_file)
 
-        (buffer, length) = read_from_file(a_file, my_opts)
+    probability = probability_on_histogram(histogram, total)
+    a_file.seek(0)
 
-        while buffer != '':
-            total = total + length
-            histogram = buffer_histogram_dict(buffer, length, histogram)
-            (buffer, length) = read_from_file(a_file, my_opts)
+    # Calculating some sort of shannon entropy
+    (buffer, length) = read_from_file(a_file)
+    i = 0
+    while length is not None:
 
-        probability = probability_on_histogram(histogram, total)
-        a_file.close()
+        # Calculating the histogram (we only need the key to get the subset
+        # from which we want to have the entropy)
+        if length > 0:
+            histogram_slice = dict()
+            histogram_slice = buffer_histogram_dict(buffer, length, histogram_slice)
+            
+            entropy_str = str(buffer_shannon_entropy_subset(buffer, length, probability, histogram_slice, my_opts))
+            if not my_opts.output:
+                elem = str(i)  if my_opts.block  else  buffer
+                print(elem + ' : ' + entropy_str)
+            else:
+                print(entropy_str)
 
-        # Calculating some sort of shannon entropy
-        a_file = open_file(filename, my_opts)
-        (buffer, length) = read_from_file(a_file, my_opts)
-        i = 0
-        while buffer != '':
-
-            # Calculating the histogram (we only need the key to get the subset
-            # from which we want to have the entropy)
-            histogram = dict()
-            histogram = buffer_histogram_dict(buffer, length, histogram)
-
-            if length > 0:
-                if my_opts.block:
-                    if not my_opts.output:
-                        print('%s : %s' % (i, buffer_shannon_entropy_subset(buffer, length, probability, histogram, my_opts)))
-                    else:
-                        print('%s' % buffer_shannon_entropy_subset(buffer, length, probability, histogram, my_opts))
-                else:
-                    if not my_opts.output:
-                        print('%s : %s' % (buffer, buffer_shannon_entropy_subset(buffer, length, probability, histogram, my_opts)))
-                    else:
-                        print('%s' %  buffer_shannon_entropy_subset(buffer, length, probability, histogram, my_opts))
-
-            histogram.clear()
-            (buffer, length) = read_from_file(a_file, my_opts)
-            i = i + 1
-
-
-        a_file.close()
+            histogram_slice.clear()
+        (buffer, length) = read_from_file(a_file)
+        i = i + 1
 
 # End of entropy_global() function 
 
@@ -380,10 +352,17 @@ def entropy(my_opts):
     """Calculates the entropy on each line of the files
     """
 
-    if my_opts.method == 'local':
-        entropy_local(my_opts)
-    elif my_opts.method == 'global':
-        entropy_global(my_opts)
+    for filename in my_opts.files:
+        if not my_opts.output:
+            print('Calculating {0} {1} entropy on file "{2}"'.format('block'  if my_opts.block  else 'line',my_opts.method,filename))
+        
+        a_file , read_from_file = open_file(filename, my_opts)
+        if my_opts.method == 'local':
+            entropy_local(a_file, read_from_file , my_opts)
+        else:
+            entropy_global(a_file, read_from_file , my_opts)
+            
+        a_file.close()
 
 # End of entropy() function
 
